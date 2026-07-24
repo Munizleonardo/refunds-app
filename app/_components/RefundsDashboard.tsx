@@ -18,6 +18,7 @@ interface RefundsDashboardProps {
   pageSize: number;
   pageCount: number;
   totalCount: number;
+  updatedLabel: string;
 }
 
 export function RefundsDashboard({
@@ -29,14 +30,16 @@ export function RefundsDashboard({
   pageSize,
   pageCount,
   totalCount,
+  updatedLabel,
 }: RefundsDashboardProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
   // Every filter/page-size change re-runs the Server Component with fresh
-  // searchParams, which triggers a new (small, indexed) Supabase query —
-  // never a client-side re-filter of already-downloaded data.
+  // searchParams, which re-filters the shared in-memory snapshot — it does
+  // NOT trigger a new Supabase query. The snapshot itself only refreshes on
+  // its TTL or when "Atualizar" is clicked, so it's shared by every visitor.
   const updateParams = useCallback(
     (updates: Record<string, string | null>, resetPage = true) => {
       const params = new URLSearchParams(searchParams.toString());
@@ -66,6 +69,7 @@ export function RefundsDashboard({
         filters={filters}
         countries={countries}
         onFilterChange={updateParams}
+        updatedLabel={updatedLabel}
       />
       <RefundsTable refunds={refunds} />
       <Pagination

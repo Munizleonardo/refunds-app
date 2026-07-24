@@ -2,16 +2,17 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { refreshRefundsSnapshot } from "../_lib/refunds-actions";
 
 export function RefreshButton() {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   function handleClick() {
-    // Re-runs the Server Component with the current filters, so it
-    // re-queries Supabase for anything new. Wiring this to also trigger
-    // the n8n sync webhook is the next step.
-    startTransition(() => {
+    startTransition(async () => {
+      // Invalidates the shared snapshot server-side, then re-renders so
+      // this (and every other visitor's next request) gets the fresh pull.
+      await refreshRefundsSnapshot();
       router.refresh();
     });
   }

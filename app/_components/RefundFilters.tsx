@@ -8,6 +8,7 @@ interface RefundFiltersProps {
   filters: RefundFilterState;
   countries: string[];
   onFilterChange: (updates: Record<string, string | null>) => void;
+  updatedLabel: string;
 }
 
 const SEARCH_DEBOUNCE_MS = 400;
@@ -16,6 +17,7 @@ export function RefundFilters({
   filters,
   countries,
   onFilterChange,
+  updatedLabel,
 }: RefundFiltersProps) {
   // Local, immediately-responsive copy of the search text. Only pushed to
   // the URL (and therefore only re-queries Supabase) after the user pauses
@@ -98,7 +100,12 @@ export function RefundFilters({
           </div>
         </div>
 
-        <RefreshButton />
+        <div className="flex flex-col gap-1 sm:items-end">
+          <RefreshButton />
+          <span className="text-xs text-muted whitespace-nowrap">
+            Atualizado {updatedLabel}
+          </span>
+        </div>
       </div>
     </div>
   );

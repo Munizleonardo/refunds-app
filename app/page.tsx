@@ -1,6 +1,8 @@
 import { AppHeader } from "./_components/AppHeader";
 import { RefundsDashboard } from "./_components/RefundsDashboard";
 import { parseSearchParams } from "./_lib/parse-search-params";
+import { formatRelativeMinutes } from "./_lib/format";
+import { getRefundsSnapshot } from "./_lib/refunds-cache";
 import {
   getRefundCountries,
   getRefundStats,
@@ -21,11 +23,14 @@ export default async function Home({ searchParams }: HomeProps) {
     dateTo: query.dateTo,
   };
 
-  const [stats, countries, { refunds, totalCount }] = await Promise.all([
-    getRefundStats(filters),
-    getRefundCountries(),
-    getRefundsPage(filters, query.page, query.pageSize),
-  ]);
+  const [{ fetchedAt }, stats, countries, { refunds, totalCount }] =
+    await Promise.all([
+      getRefundsSnapshot(),
+      getRefundStats(filters),
+      getRefundCountries(),
+      getRefundsPage(filters, query.page, query.pageSize),
+    ]);
+  const updatedLabel = formatRelativeMinutes(fetchedAt);
 
   const pageCount = Math.max(1, Math.ceil(totalCount / query.pageSize));
 
@@ -52,6 +57,7 @@ export default async function Home({ searchParams }: HomeProps) {
           pageSize={query.pageSize}
           pageCount={pageCount}
           totalCount={totalCount}
+          updatedLabel={updatedLabel}
         />
       </main>
     </div>
