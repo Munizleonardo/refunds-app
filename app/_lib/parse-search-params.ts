@@ -18,7 +18,9 @@ export function parseSearchParams(raw: RawSearchParams): RefundQueryState {
 
   const rawType = first(raw.type);
   const transactionType: "all" | TransactionType =
-    rawType === "RFND" || rawType === "CHBK" ? rawType : "all";
+    rawType === "SALE" || rawType === "RFND" || rawType === "CHBK"
+      ? rawType
+      : "all";
 
   const country = first(raw.country) || "all";
 

@@ -1,5 +1,12 @@
 import type { Refund } from "../_lib/types";
-import { formatCurrency, formatDate, fullName } from "../_lib/format";
+import {
+  formatCurrency,
+  formatDate,
+  fullName,
+  getRefundDeadline,
+  isRefundWindowExpired,
+  REFUND_WINDOW_DAYS,
+} from "../_lib/format";
 import { StatusBadge } from "./StatusBadge";
 
 interface RefundsTableProps {
@@ -14,14 +21,35 @@ const COLUMNS = [
   "País",
   "Vendor / Afiliado",
   "Tipo",
-  "Data",
+  "Data da venda",
+  "Prazo p/ reembolso",
 ];
+
+const DATE_COLUMN_HINT =
+  "Data em que a venda foi registrada. O sistema não guarda a data exata do reembolso/chargeback.";
+
+const DEADLINE_COLUMN_HINT = `Data da venda + ${REFUND_WINDOW_DAYS} dias.`;
+
+function DeadlineLabel({ refund }: { refund: Refund }) {
+  const deadline = getRefundDeadline(refund.createdAt);
+  const expired = isRefundWindowExpired(refund.createdAt);
+
+  return (
+    <span
+      title={DEADLINE_COLUMN_HINT}
+      className={expired ? "text-danger" : undefined}
+    >
+      {formatDate(deadline.toISOString())}
+      {expired && refund.transactionType === "SALE" ? " (expirado)" : ""}
+    </span>
+  );
+}
 
 export function RefundsTable({ refunds }: RefundsTableProps) {
   if (refunds.length === 0) {
     return (
       <div className="flex items-center justify-center rounded-xl border border-border bg-surface py-10 text-sm text-muted">
-        Nenhum refund encontrado.
+        Nenhum pedido encontrado.
       </div>
     );
   }
@@ -48,7 +76,11 @@ export function RefundsTable({ refunds }: RefundsTableProps) {
 
             <div className="flex items-center justify-between gap-3">
               <span className="text-sm">{refund.productName}</span>
-              <span className="font-medium text-danger whitespace-nowrap">
+              <span
+                className={`font-medium whitespace-nowrap ${
+                  refund.transactionType === "SALE" ? "" : "text-danger"
+                }`}
+              >
                 {formatCurrency(refund.revenue, refund.currency)}
               </span>
             </div>
@@ -59,7 +91,12 @@ export function RefundsTable({ refunds }: RefundsTableProps) {
               <span>
                 {refund.vendor} / {refund.affiliate}
               </span>
-              <span>{formatDate(refund.createdAt)}</span>
+              <span title={DATE_COLUMN_HINT}>
+                Venda: {formatDate(refund.createdAt)}
+              </span>
+              <span>
+                Prazo: <DeadlineLabel refund={refund} />
+              </span>
             </div>
           </div>
         ))}
@@ -73,6 +110,13 @@ export function RefundsTable({ refunds }: RefundsTableProps) {
                 {COLUMNS.map((column) => (
                   <th
                     key={column}
+                    title={
+                      column === "Data da venda"
+                        ? DATE_COLUMN_HINT
+                        : column === "Prazo p/ reembolso"
+                          ? DEADLINE_COLUMN_HINT
+                          : undefined
+                    }
                     className="px-4 py-3 font-medium text-muted whitespace-nowrap"
                   >
                     {column}
@@ -102,7 +146,11 @@ export function RefundsTable({ refunds }: RefundsTableProps) {
                   <td className="px-4 py-3 whitespace-nowrap">
                     {refund.productName}
                   </td>
-                  <td className="px-4 py-3 font-medium text-danger whitespace-nowrap">
+                  <td
+                    className={`px-4 py-3 font-medium whitespace-nowrap ${
+                      refund.transactionType === "SALE" ? "" : "text-danger"
+                    }`}
+                  >
                     {formatCurrency(refund.revenue, refund.currency)}
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap">
@@ -121,6 +169,9 @@ export function RefundsTable({ refunds }: RefundsTableProps) {
                   </td>
                   <td className="px-4 py-3 whitespace-nowrap text-muted">
                     {formatDate(refund.createdAt)}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <DeadlineLabel refund={refund} />
                   </td>
                 </tr>
               ))}

@@ -50,16 +50,19 @@ export async function getRefundStats(filters: CommonFilters): Promise<RefundStat
   const { refunds } = await getRefundsSnapshot();
   const matched = refunds.filter((refund) => matchesFilters(refund, filters));
 
-  const count = matched.length;
-  const totalValue = matched.reduce((sum, refund) => sum + refund.revenue, 0);
+  const refundedRows = matched.filter(
+    (refund) => refund.transactionType === "RFND" || refund.transactionType === "CHBK"
+  );
+  const totalRefunded = refundedRows.reduce((sum, refund) => sum + refund.revenue, 0);
   const chargebacks = matched.filter(
     (refund) => refund.transactionType === "CHBK"
   ).length;
 
   return {
-    count,
-    totalValue,
-    average: count > 0 ? totalValue / count : 0,
+    totalOrders: matched.length,
+    refundedCount: refundedRows.length,
+    totalRefunded,
+    averageRefund: refundedRows.length > 0 ? totalRefunded / refundedRows.length : 0,
     chargebacks,
   };
 }

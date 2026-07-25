@@ -38,13 +38,13 @@ export default async function Home({ searchParams }: HomeProps) {
     <div className="flex flex-col flex-1">
       <AppHeader />
 
-      <main className="flex flex-col gap-5 flex-1 w-full max-w-6xl mx-auto px-4 py-5 sm:gap-6 sm:px-6 sm:py-8">
+      <main className="flex flex-col gap-5 flex-1 w-full max-w-[1600px] mx-auto px-4 py-5 sm:gap-6 sm:px-6 sm:py-8">
         <div className="flex flex-col gap-1">
           <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
             Consulta de Refunds
           </h1>
           <p className="text-sm text-muted">
-            Acompanhe e consulte os reembolsos processados.
+            Acompanhe todos os pedidos e o status de reembolso de cada um.
           </p>
         </div>
 

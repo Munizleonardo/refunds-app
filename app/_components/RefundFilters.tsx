@@ -56,6 +56,7 @@ export function RefundFilters({
               className="w-full cursor-pointer rounded-lg border border-border bg-surface-muted px-3 py-2.5 text-sm text-foreground outline-none focus:border-accent sm:py-2"
             >
               <option value="all">Todos</option>
+              <option value="SALE">Sem reembolso</option>
               <option value="RFND">Refund</option>
               <option value="CHBK">Chargeback</option>
             </select>

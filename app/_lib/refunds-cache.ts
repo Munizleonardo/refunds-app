@@ -3,7 +3,9 @@ import { createSupabaseServerClient } from "./supabase-server";
 import type { Refund } from "./types";
 
 const TABLE = "clickbank_orders_email_us";
-const REFUND_TYPES = ["RFND", "CHBK"] as const;
+// Real orders only — excludes ABANDONED_ORDER (carts that never became a
+// sale, so they can't have a refund status).
+const ORDER_TYPES = ["SALE", "RFND", "CHBK"] as const;
 
 // Only the columns the UI renders. `raw_payload` is deliberately excluded —
 // it's a heavy jsonb blob (~1.7KB/row) not shown anywhere here.
@@ -46,24 +48,96 @@ function toRefund(row: Record<string, unknown>): Refund {
   };
 }
 
-async function fetchSnapshot(): Promise<RefundsSnapshot> {
-  const supabase = createSupabaseServerClient();
+// ~30k rows include SALE, so an unbounded `select ... order by created_at`
+// scans/sorts the whole table (no index on created_at) and hits Supabase's
+// statement timeout. Fetching in small chunks ordered by the primary key
+// (indexed, so each chunk is fast and — unlike an unindexed sort — stable
+// across separate requests) avoids that. The chronological order the UI
+// actually wants is applied once, in memory, after everything is in.
+const FETCH_CHUNK_SIZE = 1000;
+const MAX_CHUNKS = 200; // safety cap (~200k rows) against a runaway loop
+const CHUNK_CONCURRENCY = 6; // avoid bursting the connection pool
+
+async function fetchChunk(
+  supabase: ReturnType<typeof createSupabaseServerClient>,
+  chunkIndex: number
+): Promise<Refund[]> {
+  const from = chunkIndex * FETCH_CHUNK_SIZE;
   const { data, error } = await supabase
     .from(TABLE)
     .select(DISPLAY_COLUMNS)
-    .in("transaction_type", REFUND_TYPES)
-    .order("created_at", { ascending: false });
+    .in("transaction_type", ORDER_TYPES)
+    .order("id", { ascending: true })
+    .range(from, from + FETCH_CHUNK_SIZE - 1);
 
-  if (error) throw new Error(`Falha ao buscar refunds: ${error.message}`);
+  if (error) throw new Error(`Falha ao buscar pedidos: ${error.message}`);
+  return (data ?? []).map((row) => toRefund(row as Record<string, unknown>));
+}
 
-  const refunds = (data ?? []).map((row) =>
-    toRefund(row as Record<string, unknown>)
+async function fetchAllOrders(): Promise<Refund[]> {
+  const supabase = createSupabaseServerClient();
+
+  const { count, error: countError } = await supabase
+    .from(TABLE)
+    .select("id", { count: "exact", head: true })
+    .in("transaction_type", ORDER_TYPES);
+
+  if (countError) {
+    throw new Error(
+      `Falha ao contar pedidos: ${countError.message || "erro desconhecido ao contar"}`
+    );
+  }
+
+  const totalChunks = Math.min(
+    MAX_CHUNKS,
+    Math.max(1, Math.ceil((count ?? 0) / FETCH_CHUNK_SIZE))
   );
+
+  // The count is known upfront, so chunks can be requested concurrently
+  // instead of one at a time — capped so a once-a-day refresh doesn't
+  // burst the connection pool with dozens of simultaneous requests.
+  const all: Refund[] = [];
+  for (let start = 0; start < totalChunks; start += CHUNK_CONCURRENCY) {
+    const batch = Array.from(
+      { length: Math.min(CHUNK_CONCURRENCY, totalChunks - start) },
+      (_, i) => fetchChunk(supabase, start + i)
+    );
+    const results = await Promise.all(batch);
+    for (const rows of results) all.push(...rows);
+  }
+
+  all.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return all;
+}
+
+async function fetchSnapshot(): Promise<RefundsSnapshot> {
+  const refunds = await fetchAllOrders();
   const countries = Array.from(
     new Set(refunds.map((r) => r.country).filter(Boolean))
   ).sort();
 
   return { refunds, countries, fetchedAt: Date.now() };
+}
+
+const MAX_ATTEMPTS = 3;
+const RETRY_DELAY_MS = 1500;
+
+/** This whole pipeline runs once a day at most — a couple of retries on transient failure is cheap insurance. */
+async function fetchSnapshotWithRetry(): Promise<RefundsSnapshot> {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      return await fetchSnapshot();
+    } catch (error) {
+      lastError = error;
+      if (attempt < MAX_ATTEMPTS) {
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS * attempt));
+      }
+    }
+  }
+
+  throw lastError;
 }
 
 /**
@@ -78,7 +152,7 @@ export async function getRefundsSnapshot(): Promise<RefundsSnapshot> {
   // Concurrent requests hitting a cold/expired cache share the same
   // in-flight fetch instead of each starting their own.
   if (!pending) {
-    pending = fetchSnapshot().finally(() => {
+    pending = fetchSnapshotWithRetry().finally(() => {
       pending = null;
     });
   }

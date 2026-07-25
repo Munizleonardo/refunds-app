@@ -19,6 +19,25 @@ export function fullName(firstName: string, lastName: string): string {
   return [firstName, lastName].filter(Boolean).join(" ") || "—";
 }
 
+export const REFUND_WINDOW_DAYS = 60;
+
+/** Purchase date + the refund window (60 days), as a Date. */
+export function getRefundDeadline(
+  createdAtIso: string,
+  days = REFUND_WINDOW_DAYS
+): Date {
+  const deadline = new Date(createdAtIso);
+  deadline.setUTCDate(deadline.getUTCDate() + days);
+  return deadline;
+}
+
+export function isRefundWindowExpired(
+  createdAtIso: string,
+  days = REFUND_WINDOW_DAYS
+): boolean {
+  return getRefundDeadline(createdAtIso, days).getTime() < Date.now();
+}
+
 export function formatRelativeMinutes(fetchedAt: number): string {
   const minutes = Math.floor((Date.now() - fetchedAt) / 60000);
   if (minutes < 1) return "agora mesmo";
